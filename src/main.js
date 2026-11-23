@@ -113,8 +113,15 @@ async function boot() {
     const ms = now - last; last = now; ema += (ms - ema) * 0.05; fps = 1000 / ema; adapt(ms, now);
     resize(); prof.begin?.(); acc = Math.min(acc + ms / 1000, 2 * DT);
     while (acc >= DT - 1e-4) { acc -= DT; const last = acc < DT - 1e-4; submit(e => step(e, last)); }
-    draw(); drawn++; prof.read(); if (DEBUG && frame % 20 === 0) overlay();
+    draw(); drawn++; if (drawn === 1) reveal(); prof.read(); if (DEBUG && frame % 20 === 0) overlay();
     requestAnimationFrame(tick);
+  }
+  // Lift the loading still once the first real frame has reached the screen, but not before the fog has
+  // had a moment to gather (a flash of the still, then the live window, looks like a glitch).
+  function reveal() {
+    device.queue.onSubmittedWorkDone().then(() => setTimeout(() => requestAnimationFrame(() => {
+      document.body.classList.add('live'); setTimeout(() => $('veil')?.remove(), 2000);
+    }), Math.max(0, 1400 - performance.now())));
   }
   requestAnimationFrame(tick);
 
