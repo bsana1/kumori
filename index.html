@@ -7,6 +7,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#07080c">
 <link rel="preload" as="image" href="assets/first.jpg">
+<script>
+  // Startup log, kept from the first moment so errors on devices we can't attach a console to can be read.
+  window.KLOG = []; window.klog = m => { KLOG.push((performance.now() / 1000).toFixed(1) + 's  ' + m); window.kshow?.(); };
+  addEventListener('error', e => klog('error: ' + (e.message || e.error) + ' @ ' + String(e.filename || '').split('/').pop() + ':' + e.lineno));
+  addEventListener('unhandledrejection', e => klog('rejected: ' + (e.reason?.stack || e.reason?.message || e.reason)));
+  klog(navigator.userAgent + '  ' + screen.width + 'x' + screen.height + ' @' + devicePixelRatio);
+</script>
 <title>曇り Kumori</title>
 <style>
   html,body{margin:0;height:100%;background:#07080c;overflow:hidden;overscroll-behavior:none}
@@ -22,13 +29,21 @@
   @keyframes fog{to{opacity:1}}
   body.live #veil{opacity:0}
   #msg{z-index:2;text-shadow:0 1px 8px #000}
+  /* Startup report: shown with ?diag, or by itself if the window hasn't come alive in 20 s, so a phone user can screenshot it. */
+  #diag{position:fixed;left:0;right:0;bottom:0;max-height:60%;overflow:auto;z-index:3;display:none;margin:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(5,6,10,.88);color:#cfe9d8;font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;-webkit-user-select:text;user-select:text}
 </style>
 </head>
 <body>
 <div id="veil" aria-hidden="true"><i class="sharp"></i><i class="soft"></i><i class="haze"></i></div>
 <canvas id="c" aria-label="A foggy window you can wipe with your finger"></canvas>
-<div id="msg" role="alert"></div><div id="dbg" hidden></div>
-<script type="module" src="src/main.js?v=13"></script>
+<div id="msg" role="alert"></div><div id="dbg" hidden></div><pre id="diag"></pre>
+<script>
+  window.kshow = () => { const d = document.getElementById('diag'); if (d && d.dataset.on) d.textContent = 'Kumori startup report (screenshot this)\n\n' + KLOG.join('\n'); };
+  const diagOn = () => { const d = document.getElementById('diag'); d.dataset.on = 1; d.style.display = 'block'; kshow(); };
+  if (location.search.includes('diag')) diagOn();
+  setTimeout(() => { if (!document.body.classList.contains('live')) { klog('not live after 20 s'); diagOn(); } }, 20000);
+</script>
+<script type="module" src="src/main.js?v=14"></script>
 <!-- Cloudflare Web Analytics: counts visits, no cookies. Dashboard: Analytics > Web analytics. Only on the
      live site, so local test runs aren't counted. -->
 <script>

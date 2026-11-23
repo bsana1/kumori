@@ -10,15 +10,18 @@ const SEED = +(q.get('seed') ?? 7), WARP = +(q.get('t') ?? 14), PX = q.get('px')
 const CAP = 4.3e6;
 let maxPx = +(PX ?? 3.2e6);
 const DT = 1 / 60, HEIGHT = 900;
-const fail = m => { $('msg').style.display = 'grid'; $('msg').textContent = m; };
+const log = m => window.klog?.(m);
+const fail = m => { log('shown: ' + m); $('msg').style.display = 'grid'; $('msg').textContent = m; };
 
 async function boot() {
+  log('webgpu: ' + (navigator.gpu ? 'yes' : 'no'));
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
+  if (adapter) { const i = adapter.info || {}, L = adapter.limits; log(`adapter: ${i.vendor || '?'} ${i.architecture || ''} ${i.description || ''}${adapter.isFallbackAdapter ? ' (fallback)' : ''}`); log(`limits: storage/stage ${L.maxStorageBuffersPerShaderStage}, storage binding ${(L.maxStorageBufferBindingSize / 2 ** 20) | 0} MB, buffer ${(L.maxBufferSize / 2 ** 20) | 0} MB, invocations ${L.maxComputeInvocationsPerWorkgroup}, tex ${L.maxTextureDimension2D}; features: ${[...adapter.features].join(' ')}`); }
   if (!adapter) return fail('This window needs WebGPU. Try a current Chrome, Edge, or Safari 26 and later.');
   const device = await adapter.requestDevice({ requiredFeatures: adapter.features.has('timestamp-query') ? ['timestamp-query'] : [] });
-  device.lost.then(i => { if (i.reason !== 'destroyed') { console.error('device lost', i.message); fail('The graphics device was reset. Reload to carry on.'); } });
+  log('device: ok'); device.lost.then(i => { log('device lost: ' + i.reason + ' ' + i.message); if (i.reason !== 'destroyed') { console.error('device lost', i.message); fail('The graphics device was reset. Reload to carry on.'); } });
   const seen = new Set(); // the first error cascades every frame; report each distinct one once
-  device.onuncapturederror = e => { if (!seen.has(e.error.message) && seen.size < 12) { seen.add(e.error.message); console.error('GPU', e.error.message); } };
+  device.onuncapturederror = e => { if (!seen.has(e.error.message) && seen.size < 12) { seen.add(e.error.message); console.error('GPU', e.error.message); log('GPU error: ' + e.error.message.slice(0, 400)); } };
 
   const ctx = canvas.getContext('webgpu');
   const hdr = matchMedia('(dynamic-range: high)').matches;
@@ -26,6 +29,7 @@ async function boot() {
   ctx.configure({ device, format, colorSpace: matchMedia('(color-gamut: p3)').matches ? 'display-p3' : 'srgb', toneMapping: { mode: hdr ? 'extended' : 'standard' }, alphaMode: 'opaque' });
 
   const sh = await loadShaders(['reset', 'field', 'beads', 'spawn', 'liquid', 'splat', 'blur', 'scene', 'lens', 'glass', 'finish', 'letters', 'shade:tree', 'shade:plants', 'shade:life', 'shade:snow', 'over', 'air']), chars = await loadStrokes();
+  log(`shaders loaded; canvas format ${format}, hdr ${hdr}`);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches, nSegs = chars.reduce((a, c) => a + c.strokes.reduce((b, s) => b + s.length - 1, 0), 0);
   let growth = null, letters = null, warming = false;
   const ub = device.createBuffer({ size: UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -83,14 +87,14 @@ async function boot() {
 
   function resize(force) {
     const r = canvas.getBoundingClientRect(); let w = r.width * devicePixelRatio, h = r.height * devicePixelRatio;
-    if (w < 2 || h < 2) return; const k = Math.min(1, Math.sqrt(maxPx / (w * h))); w = Math.round(w * k); h = Math.round(h * k);
+    if (w < 2 || h < 2) { if (!water && !resize.told) { resize.told = 1; log('waiting: the page has no size yet'); } return; } const k = Math.min(1, Math.sqrt(maxPx / (w * h))); w = Math.round(w * k); h = Math.round(h * k);
     if (!force && water && w === canvas.width && h === canvas.height) return;
     canvas.width = w; canvas.height = h; const ns = [HEIGHT * w / h, HEIGHT];
     renderer ??= createRenderer(device, g, sh, samp, format);
     if (!water || Math.abs(ns[0] - size[0]) > 4) {
       water?.destroy(); growth?.destroy(); size = ns; growth = createGrowth(device, g, sh, size, renderer.noise); growth.lamps = lamps; water = createWater(device, g, sh, samp, size, nSegs, growth.view); letters = createLetters(chars, size, still, (l, p) => growth.wake(l.char, p), l => growth.busy(l.char)); warming = true; uniforms(); submit(e => water.reset(e));
       for (let i = 0; i < WARP * 60; i++) submit(e => step(e));
-      warming = false;
+      warming = false; log(`simulation ready: ${canvas.width}x${canvas.height} px`);
     }
     renderer.resize(w, h, water, growth);
   }
@@ -121,7 +125,7 @@ async function boot() {
   // had a moment to gather (a flash of the still, then the live window, looks like a glitch).
   function reveal() {
     device.queue.onSubmittedWorkDone().then(() => setTimeout(() => requestAnimationFrame(() => {
-      document.body.classList.add('live'); setTimeout(() => $('veil')?.remove(), 2000);
+      document.body.classList.add('live'); log('live'); setTimeout(() => log(`fps ${fps?.toFixed(0)} at ${canvas.width}x${canvas.height}`), 5000); setTimeout(() => $('veil')?.remove(), 2000);
     }), Math.max(0, 1400 - performance.now())));
   }
   requestAnimationFrame(tick);
@@ -174,4 +178,4 @@ async function boot() {
     down, move, up: id => fingers.delete(id), set rain(v) { rain = v; }, set condense(v) { condense = v; }, set dry(v) { dry = v ? 1 : 0; },
   };
 }
-boot().catch(e => { console.error(e); fail('Something went wrong starting the window. Details are in the console.'); });
+boot().catch(e => { console.error(e); log('boot failed: ' + (e?.stack || e)); fail('Something went wrong starting the window. Details are in the console.'); });
