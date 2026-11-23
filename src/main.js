@@ -36,7 +36,7 @@ async function boot() {
   const g = createGPU(device, ub), samp = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
   const prof = createProfiler(device, DEBUG);
   let size = [0, 0], water = null, time = 0, frame = 0, rain = +(q.get('rain') ?? 0.5), condense = +(q.get('condense') ?? 1);
-  let renderer = null, dry = 0;
+  let renderer = null, dry = 0, warm = 0;
 
   // ---- input: each touch is a finger; positions are in glass units
   const fingers = new Map();
@@ -93,10 +93,19 @@ async function boot() {
     renderer ??= createRenderer(device, g, sh, samp, format);
     if (!water || Math.abs(ns[0] - size[0]) > 4) {
       water?.destroy(); growth?.destroy(); size = ns; growth = createGrowth(device, g, sh, size, renderer.noise); growth.lamps = lamps; water = createWater(device, g, sh, samp, size, nSegs, growth.view); letters = createLetters(chars, size, still, (l, p) => growth.wake(l.char, p), l => growth.busy(l.char)); warming = true; uniforms(); submit(e => water.reset(e));
-      for (let i = 0; i < WARP * 60; i++) submit(e => step(e));
-      warming = false; log(`simulation ready: ${canvas.width}x${canvas.height} px`);
+      warm = WARP * 60; log(`warming up: ${canvas.width}x${canvas.height} px`);
     }
     renderer.resize(w, h, water, growth);
+  }
+  // The head start (WARP seconds of rain before the first frame) is fed to the GPU in small chunks, each
+  // waited for. Every step is its own submit (its uniforms differ), and Safari on iPhone fails with
+  // "Unable to begin compute pass" once about 64 are queued at once; this caps it at CHUNK.
+  let warmBusy = false; const CHUNK = 24;
+  function warmUp() {
+    if (warmBusy) return; warmBusy = true; const n = Math.min(warm, CHUNK);
+    for (let i = 0; i < n; i++) submit(e => step(e));
+    warm -= n; device.queue.onSubmittedWorkDone().then(() => { warmBusy = false; });
+    if (!warm) { warming = false; log('simulation ready'); }
   }
   const draw = () => submit(enc => { pointer(); uniforms(); growth.upload(); renderer.draw(enc, ctx.getCurrentTexture().createView(), prof); prof.resolve(enc); });
   resize(true);
@@ -116,7 +125,9 @@ async function boot() {
     if (paused) { last = now; return requestAnimationFrame(tick); }
     const ms = now - last; last = now; ema += (ms - ema) * 0.05; fps = 1000 / ema; adapt(ms, now);
     // A page opened with no size yet (a hidden or not-yet-shown tab) has nothing to draw: wait for one.
-    resize(); if (!water) return requestAnimationFrame(tick); prof.begin?.(); acc = Math.min(acc + ms / 1000, 2 * DT);
+    resize(); if (!water) return requestAnimationFrame(tick);
+    if (warm || warmBusy && warming) { if (warm) warmUp(); acc = 0; ema = 16; return requestAnimationFrame(tick); }
+    prof.begin?.(); acc = Math.min(acc + ms / 1000, 2 * DT);
     while (acc >= DT - 1e-4) { acc -= DT; const last = acc < DT - 1e-4; submit(e => step(e, last)); }
     draw(); drawn++; if (drawn === 1) reveal(); prof.read(); if (DEBUG && frame % 20 === 0) overlay();
     requestAnimationFrame(tick);
