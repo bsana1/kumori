@@ -28,8 +28,12 @@
 <div id="veil" aria-hidden="true"><i class="sharp"></i><i class="soft"></i><i class="haze"></i></div>
 <canvas id="c" aria-label="A foggy window you can wipe with your finger"></canvas>
 <div id="msg" role="alert"></div><div id="dbg" hidden></div>
-<script type="module" src="src/main.js?v=12"></script>
-<!-- Cloudflare Web Analytics: counts visits, no cookies. Dashboard: Analytics > Web analytics. -->
-<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "89b1a3b6928642cd9f4635371033a48c"}'></script>
+<script type="module" src="src/main.js?v=13"></script>
+<!-- Cloudflare Web Analytics: counts visits, no cookies. Dashboard: Analytics > Web analytics. Only on the
+     live site, so local test runs aren't counted. -->
+<script>
+  if (location.hostname.endsWith('.workers.dev')) { const s = document.createElement('script'); s.defer = true;
+    s.src = 'https://static.cloudflareinsights.com/beacon.min.js'; s.dataset.cfBeacon = '{"token": "89b1a3b6928642cd9f4635371033a48c"}'; document.body.append(s); }
+</script>
 </body>
 </html>

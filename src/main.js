@@ -111,7 +111,8 @@ async function boot() {
   function tick(now) {
     if (paused) { last = now; return requestAnimationFrame(tick); }
     const ms = now - last; last = now; ema += (ms - ema) * 0.05; fps = 1000 / ema; adapt(ms, now);
-    resize(); prof.begin?.(); acc = Math.min(acc + ms / 1000, 2 * DT);
+    // A page opened with no size yet (a hidden or not-yet-shown tab) has nothing to draw: wait for one.
+    resize(); if (!water) return requestAnimationFrame(tick); prof.begin?.(); acc = Math.min(acc + ms / 1000, 2 * DT);
     while (acc >= DT - 1e-4) { acc -= DT; const last = acc < DT - 1e-4; submit(e => step(e, last)); }
     draw(); drawn++; if (drawn === 1) reveal(); prof.read(); if (DEBUG && frame % 20 === 0) overlay();
     requestAnimationFrame(tick);
