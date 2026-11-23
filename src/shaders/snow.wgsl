@@ -6,12 +6,15 @@
 // shutter would catch (1/90 s), rather than jumping from place to place.
 const FLAKES: u32 = 14000u;
 struct SV { @builtin(position) pos: vec4f, @location(0) q: vec2f, @location(1) @interpolate(flat) c: vec4f, @location(2) @interpolate(flat) k: vec4f };
-fn flakeAt(id: u32, t: f32) -> vec4f {
+fn flakeAt(id: u32, t: f32, drift: f32) -> vec4f {
   let h = vec4f(rnd(id * 4u + 7u), rnd(id * 4u + 8u), rnd(id * 4u + 9u), rnd(id * 4u + 10u));
   let z = 0.9 + 13.0 * pow(h.y, 1.6); let asp = U.size.x / U.size.y;
   let top = 1.62 + (1.0 - 0.06) * 0.59 * z + 0.4; let H = top + 0.05; let v = mix(0.45, 0.85, h.z);
   let fall = fract(t * v / H + h.w); let cyc = floor(t * v / H + h.w);
-  var p = vec3f(across(h.x * 2.4 - 1.2, z), top - fall * H, z);
+  // A tipped phone makes the snow fall slanting: each flake has moved sideways drift x its speed (metres),
+  // wrapped round the width of the view at its depth so the fall stays even.
+  let u = fract(h.x + drift * v / (2.4 * asp * 0.59 * z));
+  var p = vec3f(across(u * 2.4 - 1.2, z), top - fall * H, z);
   let ph = h.w * 40.0 + cyc * 3.1;
   p.x += 0.07 * sin(t * (0.9 + h.z) + ph) + 0.025 * sin(t * 2.3 + ph * 1.7); p.z += 0.03 * cos(t * (0.9 + h.x) + ph);
   p.x += windAt(p) * (0.9 + 0.6 * h.z);
@@ -19,10 +22,10 @@ fn flakeAt(id: u32, t: f32) -> vec4f {
 }
 @vertex fn vsSnow(@builtin(vertex_index) vi: u32, @builtin(instance_index) id: u32) -> SV {
   var o: SV; let W = U.world[1]; let dens = W.z;
-  let h = rnd(id * 4u + 11u); let f = flakeAt(id, U.time); let cyc = f.w;
+  let h = rnd(id * 4u + 11u); let f = flakeAt(id, U.time, U.tilt.z); let cyc = f.w;
   // How heavy the fall is decides how many flakes take part; each flake keeps its turn for a whole fall.
   let keep = rnd(id * 9u + u32(cyc) * 131u); if (keep > dens * (0.25 + 0.75 * smoothstep(0.0, 14.0, W.x)) || W.x <= 0.0) { o.pos = HIDE; return o; }
-  let p = f.xyz; let p0 = flakeAt(id, U.time - 1.0 / 90.0).xyz;   // a short exposure: snow should read as flakes, not rain
+  let p = f.xyz; let p0 = flakeAt(id, U.time - 1.0 / 90.0, U.tilt.z - U.tilt.w / 90.0).xyz;   // a short exposure: snow should read as flakes, not rain
   let c = project(p); let c0 = project(p0);
   if (c.w < 0.3 || p.y < 0.0) { o.pos = HIDE; return o; }
   // Size: the flake, but never under ~1 px, keeping its light; near ones swell a little out of focus.

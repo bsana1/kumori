@@ -13,7 +13,8 @@ struct Uniforms {
   treePos: vec4f,            // canopy centre, presence
   wind: vec4f,               // gust now, direction of the final gust, history phase, where gusts start (x)
   gusts: array<vec4f, 16>,   // the last four seconds of wind, 15 samples a second, newest first
-  world: array<vec4f, 5>,    // age, seconds into its ending, light, letter's screen x (-1..1): shore, stream, field, birds, bear
+  world: array<vec4f, 4>,    // age, seconds into its ending, light, letter's screen x (-1..1): shore, stream, field, birds
+  tilt: vec4f,               // which way is down on the glass (x right, y down; (0,1) upright), snow's sideways drift so far, its rate
   pane: vec4f,               // anything growing (0/1), its light, unused, 1 = dry glass (checks only)
   cursor: vec4f,             // the pointer's drop: xy, radius (0 hidden), pressed
   cursorV: vec4f,            // its stretch xy, opacity

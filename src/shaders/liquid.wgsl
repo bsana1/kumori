@@ -42,7 +42,7 @@ fn sdt() -> f32 { return U.dt * 0.5; }
   let held = hash21(p.xy / 3.2) > 0.70 && X[g.x].z < 1.9;
   if (held) { mob *= 0.03; }
   var v = p.zw;
-  v.y += 1500.0 * mob * dt;
+  v += 1500.0 * mob * dt * U.tilt.xy;   // down is wherever the phone says it is
   v.x += (vnoise(p.xy * vec2f(0.045, 0.03) + 31.0) - 0.5) * 1100.0 * mob * dt;
   // Drops are drawn into tracks that are already wet.
   let e = 7.0 / U.size.x;
@@ -117,8 +117,10 @@ fn sdt() -> f32 { return U.dt * 0.5; }
     }
   }
   let sp = length(v); if (sp > 700.0) { v *= 700.0 / sp; }
-  if (np.x < 1.0) { np.x = 1.0; v.x = abs(v.x) * 0.2; } if (np.x > U.size.x - 1.0) { np.x = U.size.x - 1.0; v.x = -abs(v.x) * 0.2; }
-  if (np.y > U.size.y + 12.0 || np.y < -80.0 || !(np.x == np.x)) {
+  // The side frames hold water back, unless the glass is tipped towards them: then it runs off there.
+  let offSide = (np.x < -12.0 && U.tilt.x < -0.2) || (np.x > U.size.x + 12.0 && U.tilt.x > 0.2);
+  if (!offSide) { if (np.x < 1.0 && U.tilt.x >= -0.2) { np.x = 1.0; v.x = abs(v.x) * 0.2; } if (np.x > U.size.x - 1.0 && U.tilt.x <= 0.2) { np.x = U.size.x - 1.0; v.x = -abs(v.x) * 0.2; } }
+  if (offSide || np.y > U.size.y + 12.0 || np.y < -80.0 || !(np.x == np.x)) {
     P[g.x] = vec4f(-1e6, 0.0, 0.0, 0.0);
     let t = atomicAdd(&F.top, 1); F.idx[t] = g.x; atomicAdd(&S.drained, 1u); return;
   }

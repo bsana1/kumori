@@ -4,7 +4,7 @@ import { growTree, MAX_SEGS, MAX_BLOSSOMS } from './tree.js?v=11';
 import { birds, butterflies, unproject } from './creatures.js?v=11';
 const FALLING = 1400, DELAY = 1.3, MS = 4, REEDS = 1300, PLUMES = 64 * 46, STEMS = 1700, FLORETS = 20;
 // Seconds each stays, then seconds it takes to leave. Order matches U.world; the tree is last.
-const KIND = { '辺': 0, '流': 1, '菜': 2, '瑠': 3, '土': 4 }, HOLD = [60, 30, 60, 30, 60], END = [7, 7, 7, 7, 9];
+const KIND = { '辺': 0, '流': 1, '菜': 2, '瑠': 3, '土': 4 }, HOLD = [30, 20, 30, 20, 35], END = [6, 6, 6, 6, 8];
 const FLAKES = 14000;   // match snow.wgsl
 
 export function createGrowth(device, g, sh, size, noise) {
@@ -90,7 +90,7 @@ export function createGrowth(device, g, sh, size, noise) {
       });
       flock?.step(dt, W[3].age, ending(3), ctx); whites?.step(dt, W[2].age, ending(2), ctx);
       // Snow settles while it falls (white over in about thirty seconds, just as it stops) and melts slowly once it stops.
-      cover = W[1].on && !ending(1) ? Math.min(1, cover + dt * light(1) * 0.036) : Math.max(0, cover - dt * 0.03);
+      cover = W[1].on && !ending(1) ? Math.min(1, cover + dt * light(1) * 0.05) : Math.max(0, cover - dt * 0.03);
     },
     uniforms(f32, o, o2) {
       f32.set(tree ? [W[4].age, ending(4), light(4), tree.nBlossoms, ...tree.center, 1] : [0, 0, 0, 0, 0, 0, 0, 0], o); f32.set([wind, gust, 1 - (tick % 4) / 4, from], o + 8); f32.set(hist, o + 12);

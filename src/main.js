@@ -53,6 +53,31 @@ async function boot() {
   for (const n of ['pointerup', 'pointercancel']) canvas.addEventListener(n, e => fingers.delete(e.pointerId));
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
+  // ---- tilt: which way is down in the plane of the screen (x right, y down), from the phone's orientation.
+  // Water on the glass runs that way, and snow and petals fall slanting. Without a sensor it stays (0, 1).
+  const tilt = { g: [0, 1], want: [0, 1], drift: 0, rate: 0 };
+  function orient(e) {
+    if (e.beta == null || e.gamma == null) return;
+    const b = e.beta * Math.PI / 180, c = e.gamma * Math.PI / 180;
+    const gx = Math.sin(c) * Math.cos(b), gy = -Math.sin(b);   // gravity in the device's frame, y towards its top
+    const a = (screen.orientation?.angle ?? window.orientation ?? 0) * Math.PI / 180;   // the page turns with the phone
+    const sx = gx * Math.cos(a) - gy * Math.sin(a), sy = gx * Math.sin(a) + gy * Math.cos(a);
+    const m = Math.hypot(sx, sy); if (m < 0.2) return;   // lying flat: no clear down on the glass, keep the last one
+    if (!tilt.seen) { tilt.seen = 1; log('tilt: reading'); }
+    tilt.want = [sx / m, -sy / m];
+  }
+  // iPhone asks permission for motion, and only from a tap; elsewhere it simply arrives.
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    const ask = () => DeviceOrientationEvent.requestPermission().then(r => { log('tilt: ' + r); if (r === 'granted') addEventListener('deviceorientation', orient); }).catch(e => log('tilt: ' + e.message));
+    canvas.addEventListener('touchend', ask, { once: true }); canvas.addEventListener('click', ask, { once: true });
+  } else addEventListener('deviceorientation', orient);
+  function lean(dt) {
+    const k = Math.min(1, dt * 3.5); let [x, y] = [tilt.g[0] + (tilt.want[0] - tilt.g[0]) * k, tilt.g[1] + (tilt.want[1] - tilt.g[1]) * k];
+    const m = Math.hypot(x, y) || 1; tilt.g = [x / m, y / m];
+    // Snow and petals: sideways per metre fallen, kept within ±60 degrees (upside down, they still fall down the view).
+    tilt.rate = Math.max(-1.7, Math.min(1.7, tilt.g[0] / Math.max(0.3, tilt.g[1]))); tilt.drift += tilt.rate * dt;
+  }
+
   const data = new ArrayBuffer(UNIFORM_BYTES), f32 = new Float32Array(data), u32 = new Uint32Array(data);
   // Street lights: placed once, flicker each frame.
   const rs = (() => { let s = 0x2f6e2b1; return () => { s = s + 0x6d2b79f5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
@@ -70,7 +95,7 @@ async function boot() {
     f32.fill(0, 16, 80); let i = 0;
     for (const f of fingers.values()) { if (i > 7) break; f32.set([...f.a, ...f.b, ...f.vel, f.r, 1], 16 + i++ * 8); }
     if (letters && !warming) { f32.set(letters.breaths, 432); } else f32.fill(0, 432, 452);
-    growth.uniforms(f32, 452, 528); f32[551] = dry; lights(); device.queue.writeBuffer(ub, 0, data);
+    growth.uniforms(f32, 452, 528); f32.set([...tilt.g, tilt.drift, tilt.rate], 544); f32[551] = dry; lights(); device.queue.writeBuffer(ub, 0, data);
   }
   function pointer() {
     const now = performance.now(), dt = Math.min(0.1, (now - cur.t) / 1000) || 1e-3; cur.t = now; const k = Math.min(1, dt * 12);
@@ -81,7 +106,7 @@ async function boot() {
   function step(enc, seen = true) {
     for (const f of fingers.values()) { f.a = f.b; f.b = f.next; f.vel = [(f.b[0] - f.a[0]) / DT, (f.b[1] - f.a[1]) / DT]; }
     if (letters && !warming) { for (const f of fingers.values()) letters.touch(f.a, f.b, f.r); letters.step(DT); water.setSegments(letters.data); }
-    growth.step(DT, [...fingers.values()]); time += DT; frame++; uniforms(); growth.air(enc); water.step(enc, prof, seen, !fingers.size, frame);
+    if (!warming) lean(DT); growth.step(DT, [...fingers.values()]); time += DT; frame++; uniforms(); growth.air(enc); water.step(enc, prof, seen, !fingers.size, frame);
   }
   const submit = fn => { const enc = device.createCommandEncoder(); fn(enc); device.queue.submit([enc.finish()]); };
 
@@ -158,7 +183,7 @@ async function boot() {
   }
   // Hook for scripted checks (see .agent/CODING_GUIDELINES.md).
   window.kumori = {
-    device, ledger, draw, times: prof.times, get size() { return size; }, get fps() { return fps; },
+    device, ledger, draw, times: prof.times, tilt, orient, get growth() { return growth; }, wake: ch => growth.wake(ch, [size[0] / 2, size[1] * 0.4]), get size() { return size; }, get fps() { return fps; },
     advance(sec) { for (let i = 0; i < sec * 60; i++) submit(e => step(e)); draw(); },
     stroke(pts, sec, id = 'x') { // pts in 0..1
       const P = pts.map(p => [p[0] * size[0], p[1] * size[1]]), n = Math.max(1, Math.round(sec * 60)); down(id, P[0]);

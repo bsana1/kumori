@@ -17,7 +17,7 @@ struct Blossom { p: vec3f, birth: f32, n: vec3f, size: f32, seed: f32, depth: f3
     let w = windAt(a.p); let e = vec3f(gnoise(q.xy + vec2f(t, h * 9.0)) - 0.5, gnoise(q.yx + vec2f(31.0 + t, h * 7.0)) - 0.5, gnoise(q.zy + vec2f(62.0, t)) - 0.5) * (0.75 + 2.2 * abs(w));
     let flow = vec3f(1.9 * w + 0.07, 0.28 * abs(w), -0.10 * abs(w)) + e;
     let flutter = vec3f(0.22 * sin(a.spin * 1.3 + h * 6.28), 0.10 * sin(a.spin * 2.1), 0.14 * cos(a.spin * 0.9 + h * 4.0));
-    let aim = flow + flutter + vec3f(0.0, -0.27 - 0.16 * h, 0.0);
+    let sink = 0.27 + 0.16 * h; let aim = flow + flutter + vec3f(sink * U.tilt.w, -sink, 0.0);   // tipped phone: they fall slanting
     a.v += (aim - a.v) * min(1.0, dt * (1.3 + 1.1 * h)); a.p += a.v * dt; a.age += dt; a.spin += dt * (1.4 + 2.2 * h + 1.8 * length(a.v));
     if (a.p.y < -0.25 || a.age > 14.0 || abs(a.p.x) > 5.0 || a.p.z < 0.5) { a.age = 0.0; }
   }

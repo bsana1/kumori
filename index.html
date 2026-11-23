@@ -12,6 +12,8 @@
   window.KLOG = []; window.klog = m => { KLOG.push((performance.now() / 1000).toFixed(1) + 's  ' + m); window.kshow?.(); };
   addEventListener('error', e => klog('error: ' + (e.message || e.error) + ' @ ' + String(e.filename || '').split('/').pop() + ':' + e.lineno));
   addEventListener('unhandledrejection', e => klog('rejected: ' + (e.reason?.stack || e.reason?.message || e.reason)));
+  // Testing aid: a hidden browser pane pauses animation frames; ?timerclock drives them from a timer instead.
+  if (location.search.includes('timerclock')) window.requestAnimationFrame = cb => setTimeout(() => cb(performance.now()), 16);
   klog(navigator.userAgent + '  ' + screen.width + 'x' + screen.height + ' @' + devicePixelRatio);
 </script>
 <title>曇り Kumori</title>
@@ -43,7 +45,7 @@
   if (location.search.includes('diag')) diagOn();
   setTimeout(() => { if (!document.body.classList.contains('live')) { klog('not live after 20 s'); diagOn(); } }, 20000);
 </script>
-<script type="module" src="src/main.js?v=15"></script>
+<script type="module" src="src/main.js?v=16"></script>
 <!-- Cloudflare Web Analytics: counts visits, no cookies. Dashboard: Analytics > Web analytics. Only on the
      live site, so local test runs aren't counted. -->
 <script>
