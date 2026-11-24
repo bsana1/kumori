@@ -10,10 +10,10 @@
 <meta name="author" content="Bernardo Sana, built together with Claude (Anthropic)">
 <!-- Link preview (LinkedIn, messages, etc.) -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://kumori.bernardo-sana.workers.dev/">
+<meta property="og:url" content="https://kumori-window.pages.dev/">
 <meta property="og:title" content="曇り Kumori">
 <meta property="og:description" content="A rainy window at night. Wipe the glass, touch a character, and something grows behind it.">
-<meta property="og:image" content="https://kumori.bernardo-sana.workers.dev/assets/card.jpg">
+<meta property="og:image" content="https://kumori-window.pages.dev/assets/card.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="A rain-fogged window at night with five Japanese characters written in the mist and street lanterns glowing behind the glass">
@@ -61,7 +61,7 @@
 <!-- Cloudflare Web Analytics: counts visits, no cookies. Dashboard: Analytics > Web analytics. Only on the
      live site, so local test runs aren't counted. -->
 <script>
-  if (location.hostname.endsWith('.workers.dev')) { const s = document.createElement('script'); s.defer = true;
+  if (/\.(workers|pages)\.dev$/.test(location.hostname)) { const s = document.createElement('script'); s.defer = true;
     s.src = 'https://static.cloudflareinsights.com/beacon.min.js'; s.dataset.cfBeacon = '{"token": "89b1a3b6928642cd9f4635371033a48c"}'; document.body.append(s); }
 </script>
 </body>
