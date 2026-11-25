@@ -61,7 +61,7 @@
 <!-- Cloudflare Web Analytics: counts visits, no cookies. Dashboard: Analytics > Web analytics. Only on the
      live site, so local test runs aren't counted. -->
 <script>
-  if (/\.(workers|pages)\.dev$/.test(location.hostname)) { const s = document.createElement('script'); s.defer = true;
+  if (/\.(workers|pages)\.dev$|\.github\.io$/.test(location.hostname)) { const s = document.createElement('script'); s.defer = true;
     s.src = 'https://static.cloudflareinsights.com/beacon.min.js'; s.dataset.cfBeacon = '{"token": "89b1a3b6928642cd9f4635371033a48c"}'; document.body.append(s); }
 </script>
 </body>
