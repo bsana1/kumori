@@ -13,6 +13,35 @@ function put(out, i, p, size, f, phase, u, seed, pose) { const r = cross(u, f); 
 
 // ---- a few ōruri. Each flies from perch to perch (the street lanterns, the tree, the ground) in the
 // bounding flight of small birds: bursts of wingbeats, then a short dive with the wings shut. Perched, it
+// ---- koi swim through the mist itself, and come to a finger on the glass (brought back for Luca, 2026-11-25)
+export function koi(n, asp, at, seed) {
+  const R = rng(seed), half = z => asp * 0.59 * z, out = new Float32Array(n * 16);
+  const K = Array.from({ length: n }, (_, i) => { const z = 1.9 + 1.7 * R(); const a = R() * TAU; return { p: unproject(at[0] + (R() - 0.5) * 0.1, at[1] + (R() - 0.5) * 0.1, z, asp), yaw: a, pitch: 0, yr: 0, v: 0.5, z0: z, ph: R() * TAU, s: 0.72 + 0.42 * R(), seed: R(), kind: i < 5 ? i : Math.floor(R() * 5), born: i * 0.38, wander: R() * 99, flee: 0 }; });
+  return {
+    n, out, list: K,
+    step(dt, age, end, ctx) {
+      K.forEach((k, i) => {
+        const t = age - k.born; if (t <= 0) { out[i * 16 + 3] = 0; return; }
+        let tx = 0, ty = 0, tz = 0; const hx = half(k.p[2]);
+        tx += Math.cos(k.yaw + 1.1 * Math.sin(age * 0.23 + k.wander) + 0.5 * Math.sin(age * 0.61 + k.wander * 2)); tz += 0.55 * Math.sin(k.yaw + 1.1 * Math.sin(age * 0.23 + k.wander)); ty += 0.32 * Math.sin(age * 0.31 + k.wander * 3);
+        const ex = (k.p[0] - EYE[0]) / hx; tx -= 2.6 * Math.sign(ex) * ss(0.62, 1.05, Math.abs(ex)); tz += 2.0 * ss(2.1, 1.6, k.p[2]) - 2.0 * ss(3.3, 4.0, k.p[2]);
+        const yy = (k.p[1] - EYE[1]) / (0.59 * k.p[2]) + 0.06; ty += (0.95 * (k.wander / 99) - 0.52 - yy) * 0.7 + 1.4 * ss(-0.35, -0.75, yy) - 1.4 * ss(0.45, 0.8, yy);
+        for (const o of K) if (o !== k) { const d = [k.p[0] - o.p[0], k.p[1] - o.p[1], k.p[2] - o.p[2]], l = len(d); if (l < 0.75) { const w = (0.75 - l) * 2.4 / (l + 0.1); tx += d[0] * w; ty += d[1] * w * 0.8; tz += d[2] * w; } }
+        let hurry = 0;
+        for (const f of ctx.touch) { const g = unproject(f[0], f[1], 2.15 + 0.1 * (i % 4), asp), d = [g[0] - k.p[0], g[1] - k.p[1], g[2] - k.p[2]], l = len(d); if (l < 2.6) { const w = 2.2 * ss(0.35, 0.9, l); tx += d[0] / l * w; ty += d[1] / l * w; tz += d[2] / l * w; hurry = Math.max(hurry, ss(0.3, 0.8, l)); } }
+        if (end > 0) { tz += 2.5 * end; ty += 0.3; hurry = 1; }
+        const want = Math.atan2(tz, tx); let dy = want - k.yaw; dy -= TAU * Math.round(dy / TAU);
+        k.yr += (clamp(dy * 0.9, -0.95, 0.95) - k.yr) * dt * 2.2; k.yaw += k.yr * dt; k.pitch += (clamp(ty * 0.45, -0.5, 0.5) - k.pitch) * dt * 1.1;
+        const surge = 0.5 + 0.5 * Math.sin(age * 0.8 + k.wander * 5); k.v += ((0.30 + 0.16 * surge + 0.42 * hurry) - k.v) * dt * 1.2; k.ph += dt * (2.2 + 9.5 * k.v);
+        const f = [Math.cos(k.yaw) * Math.cos(k.pitch), Math.sin(k.pitch), Math.sin(k.yaw) * Math.cos(k.pitch)]; for (let c = 0; c < 3; c++) k.p[c] += f[c] * k.v * dt;
+        const roll = -k.yr * 0.35, side = norm(cross([0, 1, 0], f)), up = [side[0] * roll, 1, side[2] * roll];
+        const grow = ss(0, 2.2, t), gone = 1 - ss(1.2 + (i % 3) * 0.6, 4.4 + (i % 3) * 0.6, end);
+        put(out, i, k.p, k.s * (0.25 + 0.75 * grow), f, k.ph, up, k.seed, [clamp(-k.yr * 1.5, -1.2, 1.2), 0.75 + 0.9 * k.v, ss(0, 0.9, t) * gone, k.kind]);
+      });
+    },
+  };
+}
+
 // looks about in quick turns of the head, and on the ground it hops.
 export function birds(n, asp, seed) {
   const R = rng(seed), out = new Float32Array(n * 16);
