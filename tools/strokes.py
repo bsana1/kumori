@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Flatten KanjiVG stroke paths (M, C, c only) to polylines.  usage: strokes.py DIR OUT.json"""
 import json, re, sys
-CHARS = [("辺", "08fba"), ("流", "06d41"), ("菜", "083dc"), ("瑠", "07460"), ("土", "0571f")]
+# 桜梅桃李 (ōbaitōri): cherry, plum, peach, sumomo; each blooms in its own way. (Until 2026-11-25: 辺流菜瑠土.)
+CHARS = [("桜", "0685c"), ("梅", "06885"), ("桃", "06843"), ("李", "0674e")]
 
 def flatten(d, step=1.6):
     tok = re.findall(r"[A-Za-z]|-?(?:\d+\.\d+|\.\d+|\d+)", d)

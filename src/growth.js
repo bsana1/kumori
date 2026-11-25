@@ -3,8 +3,13 @@
 import { growTree, MAX_SEGS, MAX_BLOSSOMS } from './tree.js?v=11';
 import { koi, birds, butterflies, unproject } from './creatures.js?v=11';
 const FALLING = 1400, DELAY = 1.3, MS = 4, REEDS = 1300, PLUMES = 64 * 46, STEMS = 1700, FLORETS = 20;
-// Seconds each stays, then seconds it takes to leave. Order matches U.world; the tree is last.
-const KIND = { '辺': 0, '流': 1, '菜': 2, '瑠': 3, '土': 4 }, HOLD = [30, 20, 30, 20, 35], END = [6, 6, 6, 6, 8];
+// The window's words are 桜梅桃李 (ōbaitōri, "each blooms in its own way"): cherry, plum, peach, sumomo.
+// Each letter wakes a slot. The slots keep their old order (it matches U.world): 0 water, reeds and koi,
+// 1 snow, 2 rapeseed field (no letter wakes it now), 3 birds, 4 the cherry tree. 梅 wakes the snow and a
+// plum tree with it; 桃 and 李 will each get their own tree too.
+// Seconds each stays, then seconds it takes to leave.
+const KIND = { '李': 0, '梅': 1, '桃': 3, '桜': 4 }, HOLD = [30, 30, 30, 25, 35], END = [6, 7, 6, 6, 8];
+const SPECIES = { 4: 0, 1: 1 };   // slot -> tree species (tree.js); the cherry keeps its own buffers
 const FLAKES = 14000;   // match snow.wgsl
 
 export function createGrowth(device, g, sh, size, noise) {
@@ -15,7 +20,7 @@ export function createGrowth(device, g, sh, size, noise) {
   const layer = tex(w, h, HDR, U.RENDER_ATTACHMENT | U.TEXTURE_BINDING, 6);
   const msaa = device.createTexture({ size: [w, h], format: HDR, sampleCount: MS, usage: U.RENDER_ATTACHMENT });
   const depth = device.createTexture({ size: [w, h], format: 'depth24plus', sampleCount: MS, usage: U.RENDER_ATTACHMENT });
-  const SB = buf(MAX_SEGS * 48), BB = buf(MAX_BLOSSOMS * 48), AB = buf(FALLING * 32), act = { koi: buf(N.koi * 64), bird: buf(N.birds * 64), fly: buf(N.fly * 64) };
+  const SB = buf(MAX_SEGS * 48), BB = buf(MAX_BLOSSOMS * 48), UB = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }), AB = buf(FALLING * 32), act = { koi: buf(N.koi * 64), bird: buf(N.birds * 64), fly: buf(N.fly * 64) };
   const mods = {}; const mod = f => mods[f] ??= device.createShaderModule({ code: sh[f], label: f });
   const pipe = (f, vs, fs, kind = 'solid') => device.createRenderPipeline({
     label: vs, layout: 'auto', vertex: { module: mod(f), entryPoint: vs }, primitive: { topology: 'triangle-list' }, multisample: { count: MS, alphaToCoverageEnabled: kind === 'cut' },
@@ -27,13 +32,13 @@ export function createGrowth(device, g, sh, size, noise) {
     reed: pipe('plants', 'vsReed', 'fsReed'), plume: pipe('plants', 'vsPlume', 'fsPlume', 'cut'), pool: pipe('plants', 'vsPool', 'fsPool', 'over'), stem: pipe('plants', 'vsStem', 'fsStem'), floret: pipe('plants', 'vsFloret', 'fsFloret', 'cut'),
     snow: pipe('snow', 'vsSnow', 'fsSnow', 'over'), koi: pipe('life', 'vsKoi', 'fsKoi', 'cut'), bird: pipe('life', 'vsBird', 'fsBird', 'cut'), fly: pipe('life', 'vsFly', 'fsFly', 'cut'),
   };
-  const none = k => group(P[k], {}), bg = { limb: group(P.limb, { 1: SB }), bloom: group(P.bloom, { 2: BB }), stamen: group(P.stamen, { 2: BB }), fall: group(P.fall, { 3: AB }) };
+  const none = k => group(P[k], {}), bg = { fall: group(P.fall, { 3: AB }) };   // tree limbs, blossoms and stamens are bound per tree (trees[slot].bg)
   for (const k of ['reed', 'plume', 'pool', 'stem', 'floret', 'snow']) bg[k] = none(k); for (const k in act) bg[k] = group(P[k], { 1: act[k] });
   const airPipe = compute(sh.air, 'air'), airBg = group(airPipe, { 1: AB, 2: BB });
   const mv = msaa.createView(), dv = depth.createView(), lv = layer.createView({ baseMipLevel: 0, mipLevelCount: 1 });
 
   const W = Array.from({ length: 5 }, () => ({ on: false, pending: 0, at: [0.5, 0.5], age: 0, hold: 60 }));
-  let tree = null, raw = 0, wind = 0, gust = 1, from = 0, tick = 0, fresh = false, dirty = true, seed = 20261122, flock = null, swim = null, cover = 0, whites = null;
+  const trees = {}; let tree = null, raw = 0, wind = 0, gust = 1, from = 0, tick = 0, fresh = false, dirty = true, seed = 20261122, flock = null, swim = null, cover = 0, whites = null;
   const hist = new Float32Array(64);
   const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const ending = i => W[i].on ? Math.max(0, W[i].age - W[i].hold) : 0, light = i => W[i].on ? ss(0.3, 4, W[i].age) * (1 - ss(END[i] * 0.33, END[i], ending(i))) : 0;
@@ -42,17 +47,25 @@ export function createGrowth(device, g, sh, size, noise) {
 
   function start(i) {
     const s = W[i]; s.on = true; s.age = 0; s.hold = HOLD[i]; const at = s.at;
-    if (i === 4) {
+    if (i in SPECIES) {
       // Choose a depth so the trunk stands under the letter without leaving the street.
-      const z = 2.62, x = Math.max(-1.72, Math.min(1.72, 0.12 + ((at[0] - 0.5) * asp * 1.18 + 0.02) * z)), lean = Math.abs(x) < 0.3 ? (x < 0 ? 0.5 : -0.5) : -Math.sign(x);
-      const t = performance.now(); tree = growTree([x, 0, z], lean, next()); tree.ms = performance.now() - t; gust = lean; fresh = true;
-      device.queue.writeBuffer(SB, 0, tree.segs, 0, tree.nSegs * 12); device.queue.writeBuffer(BB, 0, tree.blossoms, 0, tree.nBlossoms * 12);
+      const sp = SPECIES[i], z = sp === 0 ? 2.62 : 2.35, x = Math.max(-1.72, Math.min(1.72, 0.12 + ((at[0] - 0.5) * asp * 1.18 + 0.02) * z)), lean = Math.abs(x) < 0.3 ? (x < 0 ? 0.5 : -0.5) : -Math.sign(x);
+      const t0 = performance.now(), t = growTree([x, 0, z], lean, next(), sp); t.ms = performance.now() - t0;
+      // The cherry reuses SB/BB, which the loose petals (air.wgsl) also read; other trees get their own.
+      const own = sp !== 0, sb = own ? buf(MAX_SEGS * 48) : SB, bb = own ? buf(MAX_BLOSSOMS * 48) : BB, ub = own ? device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }) : UB;
+      device.queue.writeBuffer(sb, 0, t.segs, 0, t.nSegs * 12); device.queue.writeBuffer(bb, 0, t.blossoms, 0, t.nBlossoms * 12);
+      const variety = sp === 1 ? [0, 1, 1, 2][Math.floor(Math.abs(next()) % 4)] : 0;   // plum: white, pink (twice as likely) or deep red
+      trees[i] = { t, sp, variety, own, sb, bb, ub, bg: { limb: group(P.limb, { 1: sb, 4: ub }), bloom: group(P.bloom, { 2: bb, 4: ub }), stamen: group(P.stamen, { 2: bb, 4: ub }) } };
+      if (sp !== 0) return;
+      tree = t; gust = lean; fresh = true;
       tree.seats = []; for (let k = 0; k < tree.nBlossoms; k += 7) { const o = k * 12; if (tree.blossoms[o + 9] > 0.45) tree.seats.push([tree.blossoms[o], tree.blossoms[o + 1], tree.blossoms[o + 2]]); }
     } else if (i === 3) flock = birds(N.birds, asp, next());
     else if (i === 2) whites = butterflies(N.fly, asp, next());
     else if (i === 0) swim = koi(N.koi, asp, at, next());   // 辺: reeds and water keep no state; the koi do
   }
-  function stop(i) { W[i].on = false; dirty = true; if (i === 4) tree = null; if (i === 3) flock = null; if (i === 0) swim = null; if (i === 2) whites = null; }
+  function stop(i) {
+    W[i].on = false; dirty = true; const tr = trees[i]; if (tr) { if (tr.own) for (const b of [tr.sb, tr.bb, tr.ub]) b.destroy(); delete trees[i]; }
+    if (i === 4) tree = null; if (i === 3) flock = null; if (i === 0) swim = null; if (i === 2) whites = null; }
   // What the birds and butterflies know about. Birds settle in the tree, on the street lanterns or on the
   // ground beside the path, never in the stream.
   const ground = R => { const z = 2.9 + 2.6 * R(); const x = 0.12 + (R() - 0.5) * 3.4; return [x, 0, z]; };
@@ -101,20 +114,22 @@ export function createGrowth(device, g, sh, size, noise) {
       const L = Math.max(...W.map((_, i) => light(i))); f32.set([any() ? 1 : 0, L, cover, 0], o2 + 20);
       f32.set([0.5, 0.36, 0.95, 0.35 * light(3), 0, 0, 1, 0], o2 + 44);
     },
-    upload() { if (swim) device.queue.writeBuffer(act.koi, 0, swim.out); if (flock) device.queue.writeBuffer(act.bird, 0, flock.out); if (whites) device.queue.writeBuffer(act.fly, 0, whites.out); },
+    upload() { for (const i in trees) { const tr = trees[i]; device.queue.writeBuffer(tr.ub, 0, new Float32Array([W[i].age, ending(+i), light(+i), tr.t.nBlossoms, tr.sp, tr.variety, 0, 0])); }
+      if (swim) device.queue.writeBuffer(act.koi, 0, swim.out); if (flock) device.queue.writeBuffer(act.bird, 0, flock.out); if (whites) device.queue.writeBuffer(act.fly, 0, whites.out); },
     air(enc) { if (!tree) return; if (fresh) { enc.clearBuffer(AB); fresh = false; } const p = enc.beginComputePass(); p.setPipeline(airPipe); p.setBindGroup(0, airBg); p.dispatchWorkgroups(Math.ceil(FALLING / 64)); p.end(); },
     draw(enc, prof) {
       if (!any() && !dirty) return false;
       const p = enc.beginRenderPass({ colorAttachments: [{ view: mv, resolveTarget: lv, loadOp: 'clear', storeOp: 'discard', clearValue: [0, 0, 0, 0] }], depthStencilAttachment: { view: dv, depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'discard' }, timestampWrites: prof?.writes('growth') });
       const go = (k, verts, inst) => { p.setPipeline(P[k]); p.setBindGroup(0, bg[k]); p.draw(verts, inst); };
       if (swim) go('koi', 3144, N.koi); if (flock) go('bird', 1248, N.birds);
-      if (tree) { go('limb', 6, tree.nSegs); go('bloom', 6, tree.nBlossoms * 5); go('stamen', 6, tree.nBlossoms); go('fall', 6, FALLING); }
+      for (const tr of Object.values(trees)) for (const [k, v, n] of [['limb', 6, tr.t.nSegs], ['bloom', 6, tr.t.nBlossoms * 5], ['stamen', 6, tr.t.nBlossoms]]) { p.setPipeline(P[k]); p.setBindGroup(0, tr.bg[k]); p.draw(v, n); }
+      if (tree) go('fall', 6, FALLING);
       if (W[2].on) { go('stem', 192, STEMS); go('floret', 6, STEMS * FLORETS); go('fly', 12, N.fly); }
       if (W[0].on) { go('reed', 42, REEDS * 2); go('plume', 24, PLUMES * 2); }
       if (W[0].on) go('pool', 6, 1);
       if (W[1].on) go('snow', 6, FLAKES);   // last: flakes are see-through and would hide what is drawn after them
       p.end(); dirty = any(); return true;
     },
-    destroy() { for (const t of [layer, msaa, depth, SB, BB, AB, ...Object.values(act)]) t.destroy(); },
+    destroy() { for (const tr of Object.values(trees)) if (tr.own) for (const b of [tr.sb, tr.bb, tr.ub]) b.destroy(); for (const t of [layer, msaa, depth, SB, BB, UB, AB, ...Object.values(act)]) t.destroy(); },
   };
 }
