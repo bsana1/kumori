@@ -1,6 +1,6 @@
 # 曇り Kumori
 
-![A rain-fogged window at night with five Japanese characters written in the mist](assets/card.jpg)
+![A rain-fogged window at night with 桜梅桃李 written in the mist](assets/card-obaitori.jpg)
 
 **Try it: [kumori-bernardosana.pages.dev](https://kumori-bernardosana.pages.dev)** (best on a phone)
 
@@ -13,13 +13,14 @@ delight. It isn't affiliated with teamLab.
 - **Wipe the glass** with your finger (or mouse). The fog clears, water gathers at the edge of your
   finger and runs down in drops.
 - **Touch a character.** Its strokes melt and run, and something grows behind the glass:
-  辺 reeds on still water · 流 snow settling on the street · 菜 a field of rapeseed with butterflies ·
-  瑠 little blue ōruri birds · 土 a cherry tree in bloom.
+  桜 a cherry tree in bloom · 梅 a plum tree in falling snow · 桃 little blue ōruri birds ·
+  李 koi swimming through the mist over reeds and still water. (Peach and sumomo trees are coming.)
 - **Tilt your phone.** Drops on the glass, falling snow and petals follow which way is down.
   The first tap asks for permission to use motion.
 - Leave it alone and the glass fogs over again and the character is written back.
 
-The characters spell my name, Bernardo, as *be-ru-na-ru-do*.
+The characters are **桜梅桃李** (*ōbaitōri*): cherry, plum, peach and Japanese plum. Each blossoms in its own
+season and its own way, and the phrase means just that: everyone blooms in their own way.
 
 ## What it needs
 
