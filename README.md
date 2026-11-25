@@ -2,7 +2,7 @@
 
 ![A rain-fogged window at night with 桜梅桃李 written in the mist](assets/card-obaitori.jpg)
 
-**Try it: [kumori-bernardosana.pages.dev](https://kumori-bernardosana.pages.dev)** (best on a phone)
+**Try it: [bsana1.github.io/kumori](https://bsana1.github.io/kumori/)** (best on a phone)
 
 Kumori ("cloudy") is an interactive rainy window at night. It was inspired by a room at teamLab in Kyoto,
 where characters floated in the mist and came alive when my kids touched them. It's a small piece made for
